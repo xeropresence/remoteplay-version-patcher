@@ -42,12 +42,6 @@ namespace remoteplay_version_patcher
         private static HttpClient client = new HttpClient();
         static async Task Main(string[] args)
         {
-
-
-
-
-            var where = FindRemotePlay();
-
             var file = "RemotePlay.exe";
 
             if (!File.Exists(file))
