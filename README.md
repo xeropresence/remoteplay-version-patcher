@@ -6,9 +6,11 @@ What this lets you do is use older versions of remoteplay without updating.
 
 # Usage
 
-Download the latest release
+[Download the latest release](https://github.com/xeropresence/remoteplay-version-patcher/releases/)
 
 Run remoteplay-version-patcher.exe as admin.
+
+It will attempt to locate RemotePlay.exe, if it finds it, it will patch the executable and you are done.
 
 If it cannot locate RemotePlay.exe place it in the same folder and run the patcher again.
 
