@@ -4,6 +4,21 @@ This program will patch RemotePlay.exe to update its file and product version to
 
 What this lets you do is use older versions of Remote Play without updating.
 
+# What it does
+
+When you run the patcher, it:
+
+1. Looks for RemotePlay.exe in the same folder as the patcher.
+2. If no local copy exists, looks for an installed PS Remote Play copy through the Windows registry.
+3. Calls Sony's Remote Play version endpoint:
+
+   https://remoteplay.dl.playstation.net/remoteplay/module/win/rp-version-win.json
+
+4. Reads the current version from that response.
+5. Updates only the executable's file version and product version resources.
+
+The patcher does not download or install Remote Play, modify any other files, or send your local executable to Sony. It only makes a remote call to fetch Sony's current version metadata.
+
 # Usage
 
 [Download the latest release](https://github.com/ctborg/remoteplay-version-patcher/releases/)
