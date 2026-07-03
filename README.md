@@ -1,20 +1,20 @@
 # remoteplay-version-patcher
 
-This program will patch RemotePlay.exe to update its version details to the latest version provided by sony. 
+This program will patch RemotePlay.exe to update its file and product version to the latest version provided by Sony.
 
-What this lets you do is use older versions of remoteplay without updating.
+What this lets you do is use older versions of Remote Play without updating.
 
 # Usage
 
-[Download the latest release](https://github.com/xeropresence/remoteplay-version-patcher/releases/)
+[Download the latest release](https://github.com/ctborg/remoteplay-version-patcher/releases/)
 
 Run remoteplay-version-patcher.exe as admin.
 
-It will attempt to locate RemotePlay.exe, if it finds it, it will patch the executable and you are done.
+It will first look for RemotePlay.exe in the same folder as the patcher. If it finds it there, it will patch that copy.
 
-If it cannot locate RemotePlay.exe place it in the same folder and run the patcher again.
+If there is no local copy, it will attempt to locate the installed RemotePlay.exe through the Windows registry. If found, it will patch the installed executable in place.
 
-After patching return the patched executable back to the remote play folder.
+If the patcher cannot locate RemotePlay.exe through the registry, place RemotePlay.exe in the same folder as the patcher and run it again. After patching that copied executable, return the patched executable to the Remote Play folder.
 
 # Thanks and credits
 
