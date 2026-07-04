@@ -21,7 +21,7 @@ The patcher does not download or install Remote Play, modify any other files, or
 
 # Usage
 
-[Download the latest release](https://github.com/ctborg/remoteplay-version-patcher/releases/)
+[Download the latest release](https://github.com/xeropresence/remoteplay-version-patcher/releases/)
 
 Run remoteplay-version-patcher.exe as admin.
 

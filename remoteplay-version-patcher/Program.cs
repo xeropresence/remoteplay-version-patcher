@@ -51,7 +51,7 @@ namespace remoteplay_version_patcher
             if (!File.Exists(file))
             {
                 file = FindRemotePlay();
-                if (string.IsNullOrEmpty(file) || !File.Exists(file))
+                if (!File.Exists(file))
                 {
                     Console.WriteLine("Cannot find Remoteplay.exe via the registry");
                     Console.WriteLine("Place RemotePlay.exe inside the same folder as this application");
