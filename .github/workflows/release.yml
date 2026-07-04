@@ -1,0 +1,119 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build single Windows executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore remoteplay-version-patcher.sln
+
+      - name: Build release
+        run: msbuild remoteplay-version-patcher.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Install ILRepack
+        shell: pwsh
+        run: nuget install ILRepack -Version 2.0.45 -OutputDirectory tools
+
+      - name: Merge dependencies into one executable
+        shell: pwsh
+        run: |
+          $output = "remoteplay-version-patcher\bin\Release"
+          $dist = "dist"
+          $assetName = if ("${{ github.ref_type }}" -eq "tag") {
+            "remoteplay-version-patcher-${{ github.ref_name }}.exe"
+          } else {
+            "remoteplay-version-patcher.exe"
+          }
+          $mergedExe = Join-Path $dist $assetName
+          $frameworkPath = "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8"
+          $ilrepack = Get-ChildItem tools -Recurse -Filter ILRepack.exe | Select-Object -First 1
+          if ($null -eq $ilrepack) {
+            throw "ILRepack.exe was not found after NuGet install."
+          }
+
+          $inputs = @(
+            "$output\remoteplay-version-patcher.exe",
+            "$output\Newtonsoft.Json.dll",
+            "$output\Ressy.dll"
+          )
+
+          New-Item -ItemType Directory -Force -Path $dist
+
+          if (Test-Path "$output\System.ValueTuple.dll") {
+            $inputs += "$output\System.ValueTuple.dll"
+          }
+
+          $ilrepackArgs = @(
+            "/target:exe",
+            "/targetplatform:v4,$frameworkPath",
+            "/out:$mergedExe"
+          ) + $inputs
+
+          Write-Host "ILRepack arguments:"
+          $ilrepackArgs | ForEach-Object { Write-Host "  $_" }
+
+          & $ilrepack.FullName @ilrepackArgs
+
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter mt.exe |
+            Where-Object { $_.FullName -like "*\x64\mt.exe" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $mt) {
+            throw "mt.exe was not found in the Windows SDK."
+          }
+
+          & $mt.FullName -manifest "remoteplay-version-patcher\app.manifest" -outputresource:"$mergedExe;#1"
+
+      - name: Verify merged executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist -Filter *.exe | Select-Object -First 1
+          $manifest = "dist\embedded.manifest"
+          $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter mt.exe |
+            Where-Object { $_.FullName -like "*\x64\mt.exe" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $mt) {
+            throw "mt.exe was not found in the Windows SDK."
+          }
+
+          & $mt.FullName -inputresource:"$($exe.FullName);#1" -out:$manifest
+          Select-String -Path $manifest -Pattern 'level="requireAdministrator"' -SimpleMatch
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remoteplay-version-patcher
+          path: dist/*.exe
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe

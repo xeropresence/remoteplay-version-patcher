@@ -1,8 +1,23 @@
 # remoteplay-version-patcher
 
-This program will patch RemotePlay.exe to update its version details to the latest version provided by sony. 
+This program will patch RemotePlay.exe to update its file and product version to the latest version provided by Sony.
 
-What this lets you do is use older versions of remoteplay without updating.
+What this lets you do is use older versions of Remote Play without updating.
+
+# What it does
+
+When you run the patcher, it:
+
+1. Looks for RemotePlay.exe in the same folder as the patcher.
+2. If no local copy exists, looks for an installed PS Remote Play copy through the Windows registry.
+3. Calls Sony's Remote Play version endpoint:
+
+   https://remoteplay.dl.playstation.net/remoteplay/module/win/rp-version-win.json
+
+4. Reads the current version from that response.
+5. Updates only the executable's file version and product version resources.
+
+The patcher does not download or install Remote Play, modify any other files, or send your local executable to Sony. It only makes a remote call to fetch Sony's current version metadata.
 
 # Usage
 
@@ -10,11 +25,11 @@ What this lets you do is use older versions of remoteplay without updating.
 
 Run remoteplay-version-patcher.exe as admin.
 
-It will attempt to locate RemotePlay.exe, if it finds it, it will patch the executable and you are done.
+It will first look for RemotePlay.exe in the same folder as the patcher. If it finds it there, it will patch that copy.
 
-If it cannot locate RemotePlay.exe place it in the same folder and run the patcher again.
+If there is no local copy, it will attempt to locate the installed RemotePlay.exe through the Windows registry. If found, it will patch the installed executable in place.
 
-After patching return the patched executable back to the remote play folder.
+If the patcher cannot locate RemotePlay.exe through the registry, place RemotePlay.exe in the same folder as the patcher and run it again. After patching that copied executable, return the patched executable to the Remote Play folder.
 
 # Thanks and credits
 
