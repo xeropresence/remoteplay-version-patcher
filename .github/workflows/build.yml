@@ -1,0 +1,120 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on a branch, but never abandon a tag build mid-release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    name: Build native Windows executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # PublishAot and the win-x86 RID are set in the csproj, so this emits a
+      # single self-contained native binary: no runtime to install, no
+      # side-by-side DLLs, and no ILRepack merge step.
+      - name: Publish (NativeAOT)
+        run: >
+          dotnet publish remoteplay-version-patcher/remoteplay-version-patcher.csproj
+          --configuration Release
+          --output dist
+
+      # Both of these only fail on a user's machine, never at build time, so assert
+      # them here rather than trusting them:
+      #   - the binary must stay 32-bit, or it stops running on 32-bit Windows and
+      #     the registry lookup changes which view it lands in;
+      #   - it must request elevation, or patching a file under Program Files dies
+      #     with access-denied.
+      - name: Verify the executable is 32-bit and requests elevation
+        shell: pwsh
+        run: |
+          $exeBytes = [IO.File]::ReadAllBytes((Resolve-Path "dist\remoteplay-version-patcher.exe").Path)
+          $peOffset = [BitConverter]::ToInt32($exeBytes, 0x3c)
+          $machine = [BitConverter]::ToUInt16($exeBytes, $peOffset + 4)
+          if ($machine -ne 0x014C) {  # IMAGE_FILE_MACHINE_I386
+            throw ("Expected a 32-bit (i386) binary, got machine type 0x{0:X4}." -f $machine)
+          }
+          Write-Host "OK: binary is 32-bit (i386)."
+
+          Add-Type -Namespace Win32 -Name Res -MemberDefinition @'
+          [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+          public static extern IntPtr LoadLibraryEx(string f, IntPtr h, uint flags);
+          [DllImport("kernel32.dll", SetLastError = true)]
+          public static extern IntPtr FindResource(IntPtr h, IntPtr name, IntPtr type);
+          [DllImport("kernel32.dll", SetLastError = true)]
+          public static extern IntPtr LoadResource(IntPtr h, IntPtr res);
+          [DllImport("kernel32.dll")]
+          public static extern IntPtr LockResource(IntPtr data);
+          [DllImport("kernel32.dll")]
+          public static extern uint SizeofResource(IntPtr h, IntPtr res);
+          '@
+
+          $exe = (Resolve-Path "dist\remoteplay-version-patcher.exe").Path
+          $handle = [Win32.Res]::LoadLibraryEx($exe, [IntPtr]::Zero, 0x2)  # LOAD_LIBRARY_AS_DATAFILE
+          if ($handle -eq [IntPtr]::Zero) { throw "Could not load $exe" }
+
+          # Resource #1 of type RT_MANIFEST (24) is the one CreateProcess honors.
+          $res = [Win32.Res]::FindResource($handle, [IntPtr]1, [IntPtr]24)
+          if ($res -eq [IntPtr]::Zero) { throw "No RT_MANIFEST (#1) embedded in $exe" }
+
+          $size = [Win32.Res]::SizeofResource($handle, $res)
+          $ptr = [Win32.Res]::LockResource([Win32.Res]::LoadResource($handle, $res))
+          $bytes = New-Object byte[] $size
+          [Runtime.InteropServices.Marshal]::Copy($ptr, $bytes, 0, $size)
+          $manifest = [Text.Encoding]::UTF8.GetString($bytes)
+
+          if ($manifest -notmatch 'level="requireAdministrator"') {
+            throw "Embedded manifest does not request administrator elevation."
+          }
+          Write-Host "OK: embedded manifest ($size bytes) requests requireAdministrator."
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remoteplay-version-patcher
+          path: dist/remoteplay-version-patcher.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: remoteplay-version-patcher
+          path: dist
+
+      - name: Name the asset after the tag
+        run: mv dist/remoteplay-version-patcher.exe "dist/remoteplay-version-patcher-${{ github.ref_name }}.exe"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe

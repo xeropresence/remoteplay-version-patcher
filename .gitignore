@@ -1,5 +1,6 @@
 .DS_Store
 .vs/
 packages/
+dist/
 remoteplay-version-patcher/bin/
 remoteplay-version-patcher/obj/
